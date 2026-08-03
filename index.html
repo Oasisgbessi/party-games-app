@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Soirée Jeux</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14120f;
+    --felt: #2f6a4f;
+    --felt-dark: #234e3a;
+    --gold: #e8b04b;
+    --cream: #f2ede3;
+    --muted: #9a9384;
+    --full: #c1443c;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--cream);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    border-bottom: 1px solid #2a2620;
+  }
+  .brand {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 0.5px;
+  }
+  .brand span { color: var(--gold); }
+  .pseudo-box {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .pseudo-box input {
+    background: #1d1a15;
+    border: 1px solid #3a352b;
+    color: var(--cream);
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    width: 150px;
+  }
+  .pseudo-box input:focus { outline: 2px solid var(--gold); }
+  .pseudo-box button {
+    background: var(--gold);
+    color: #1d1a15;
+    border: none;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .status-line {
+    padding: 6px 28px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  main {
+    padding: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+  .game-card {
+    background: linear-gradient(180deg, #1a1712, #17140f);
+    border: 1px solid #2a2620;
+    border-radius: var(--radius);
+    padding: 18px 18px 14px;
+  }
+  .game-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .game-title {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 1.05rem;
+  }
+  .game-avail {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 20px;
+    border: 1px solid;
+  }
+  .avail-yes { color: var(--felt); border-color: var(--felt); }
+  .avail-no { color: var(--full); border-color: var(--full); }
+  .table-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.02);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .table-row:hover:not(.table-full) { background: rgba(232,176,75,0.08); }
+  .table-row.table-full { cursor: not-allowed; opacity: 0.55; }
+  .table-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    width: 46px;
+  }
+  .seats {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+  }
+  .seat {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--felt);
+  }
+  .seat.taken { background: var(--gold); border-color: var(--gold); }
+  .table-full .seat { border-color: var(--full); }
+  .table-full .seat.taken { background: var(--full); border-color: var(--full); }
+  .table-tag {
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1d1a15;
+    border: 1px solid var(--gold);
+    color: var(--cream);
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    display: none;
+  }
+  #tableView {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,9,7,0.92);
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .table-panel {
+    background: var(--felt-dark);
+    border: 1px solid var(--felt);
+    border-radius: 18px;
+    padding: 28px 32px;
+    width: 320px;
+    text-align: center;
+  }
+  .table-panel h2 { font-family: 'Archivo Black', sans-serif; margin: 0 0 4px; }
+  .table-panel .sub { color: var(--muted); font-size: 0.8rem; margin-bottom: 16px; }
+  .player-list { list-style: none; padding: 0; margin: 0 0 18px; text-align: left; }
+  .player-list li {
+    padding: 7px 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
+  .player-list li.empty { color: var(--muted); font-style: italic; }
+  .leave-btn {
+    background: transparent;
+    border: 1px solid var(--muted);
+    color: var(--cream);
+    padding: 9px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">SOIRÉE<span>·</span>JEUX</div>
+  <div class="pseudo-box">
+    <input id="pseudoInput" placeholder="Ton pseudo" maxlength="20" />
+    <button id="pseudoBtn">Valider</button>
+  </div>
+</div>
+<div class="status-line" id="statusLine">connexion…</div>
+
+<main id="gameGrid"></main>
+
+<div id="tableView">
+  <div class="table-panel">
+    <h2 id="tvGame">—</h2>
+    <div class="sub" id="tvSub">Table —</div>
+    <ul class="player-list" id="tvPlayers"></ul>
+    <button class="leave-btn" id="leaveBtn">Quitter la table</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let mySeat = null; // {gameId, tableIndex}
+
+const statusLine = document.getElementById('statusLine');
+const grid = document.getElementById('gameGrid');
+const toast = document.getElementById('toast');
+const tableView = document.getElementById('tableView');
+
+document.getElementById('pseudoBtn').onclick = () => {
+  const val = document.getElementById('pseudoInput').value;
+  socket.emit('set-pseudo', val);
+  showToast(`Pseudo défini : ${val || 'Joueur'}`);
+};
+
+document.getElementById('leaveBtn').onclick = () => {
+  socket.emit('leave-table');
+  mySeat = null;
+  tableView.style.display = 'none';
+};
+
+socket.on('connect', () => statusLine.textContent = 'connecté — choisis un pseudo puis une table');
+socket.on('disconnect', () => statusLine.textContent = 'déconnecté…');
+socket.on('error-msg', (msg) => showToast(msg));
+
+socket.on('table-full', ({ gameId, tableIndex, players }) => {
+  if (mySeat && mySeat.gameId === gameId && mySeat.tableIndex === tableIndex) {
+    showToast('Table complète — la partie peut commencer !');
+  }
+});
+
+socket.on('state', (snapshot) => {
+  grid.innerHTML = '';
+  for (const [gameId, game] of Object.entries(snapshot)) {
+    const card = document.createElement('div');
+    card.className = 'game-card';
+
+    const head = document.createElement('div');
+    head.className = 'game-head';
+    head.innerHTML = `
+      <div class="game-title">${game.label}</div>
+      <div class="game-avail ${game.available ? 'avail-yes' : 'avail-no'}">
+        ${game.available ? 'places dispo' : 'complet'}
+      </div>`;
+    card.appendChild(head);
+
+    game.tables.forEach((table) => {
+      const row = document.createElement('div');
+      row.className = 'table-row' + (table.full ? ' table-full' : '');
+
+      const seats = table.players.map(() => `<div class="seat taken"></div>`).join('')
+        + Array.from({ length: table.capacity - table.players.length })
+            .map(() => `<div class="seat"></div>`).join('');
+
+      row.innerHTML = `
+        <div class="table-label">Table ${table.index + 1}</div>
+        <div class="seats">${seats}</div>
+        <div class="table-tag">${table.players.length}/${table.capacity}</div>`;
+
+      if (!table.full) {
+        row.onclick = () => {
+          socket.emit('join-table', { gameId, tableIndex: table.index });
+          mySeat = { gameId, tableIndex: table.index };
+          openTableView(game.label, table.index);
+        };
+      }
+      card.appendChild(row);
+    });
+
+    grid.appendChild(card);
+  }
+
+  // Si on est assis quelque part, on garde la vue à jour
+  if (mySeat) {
+    const g = snapshot[mySeat.gameId];
+    if (g) {
+      const t = g.tables[mySeat.tableIndex];
+      updateTableView(g.label, t);
+    }
+  }
+});
+
+function openTableView(label, tableIndex) {
+  document.getElementById('tvGame').textContent = label;
+  document.getElementById('tvSub').textContent = `Table ${tableIndex + 1}`;
+  tableView.style.display = 'flex';
+}
+
+function updateTableView(label, table) {
+  document.getElementById('tvGame').textContent = label;
+  document.getElementById('tvSub').textContent = `Table ${table.index + 1} — ${table.players.length}/${table.capacity}`;
+  const list = document.getElementById('tvPlayers');
+  list.innerHTML = '';
+  table.players.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = p;
+    list.appendChild(li);
+  });
+  for (let i = table.players.length; i < table.capacity; i++) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'place libre…';
+    list.appendChild(li);
+  }
+}
+
+let toastTimer;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.style.display = 'none', 2500);
+}
+</script>
+</body>
+</html>

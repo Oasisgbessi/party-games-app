@@ -1,0 +1,13 @@
+{
+  "name": "party-games-app",
+  "version": "0.1.0",
+  "description": "Socle : systeme de salles/tables pour app de jeux de soiree",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
