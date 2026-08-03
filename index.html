@@ -102,9 +102,6 @@
   .avail-yes { color: var(--felt); border-color: var(--felt); }
   .avail-no { color: var(--full); border-color: var(--full); }
   .table-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     padding: 8px 10px;
     border-radius: 10px;
     margin-bottom: 6px;
@@ -114,16 +111,22 @@
   }
   .table-row:hover:not(.table-full) { background: rgba(232,176,75,0.08); }
   .table-row.table-full { cursor: not-allowed; opacity: 0.55; }
+  .table-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
   .table-label {
     font-family: 'Space Mono', monospace;
     font-size: 0.7rem;
     color: var(--muted);
-    width: 46px;
   }
   .seats {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
-    flex: 1;
+    max-width: 176px; /* 10 places par ligne (14px + 4px de gap) */
   }
   .seat {
     width: 14px;
@@ -186,6 +189,71 @@
     padding: 9px 16px;
     border-radius: 8px;
     cursor: pointer;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .dev-role {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+  .dev-word {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 1.6rem;
+    letter-spacing: 4px;
+    margin-bottom: 10px;
+    word-break: break-word;
+  }
+  .dev-timer {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .dev-timer.urgent { color: var(--full); }
+  .dev-guess-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .dev-guess-row input {
+    flex: 1;
+    background: #1d1a15;
+    border: 1px solid #3a352b;
+    color: var(--cream);
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+  .dev-guess-row button {
+    background: var(--gold);
+    color: #1d1a15;
+    border: none;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .dev-feed {
+    max-height: 90px;
+    overflow-y: auto;
+    text-align: left;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .dev-feed div { padding: 2px 0; }
+  .dev-scores {
+    text-align: left;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+  }
+  .dev-scores div {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px solid #2a2620;
   }
 </style>
 </head>
@@ -203,10 +271,26 @@
 <main id="gameGrid"></main>
 
 <div id="tableView">
-  <div class="table-panel">
+  <div class="table-panel" id="tablePanel">
     <h2 id="tvGame">—</h2>
     <div class="sub" id="tvSub">Table —</div>
-    <ul class="player-list" id="tvPlayers"></ul>
+
+    <div id="tvWaiting">
+      <ul class="player-list" id="tvPlayers"></ul>
+    </div>
+
+    <div id="tvDevinettes" style="display:none;">
+      <div class="dev-role" id="devRole"></div>
+      <div class="dev-word" id="devWord"></div>
+      <div class="dev-timer" id="devTimer"></div>
+      <div class="dev-guess-row">
+        <input id="devGuessInput" placeholder="Ta réponse…" autocomplete="off" />
+        <button id="devGuessBtn">Deviner</button>
+      </div>
+      <div class="dev-feed" id="devFeed"></div>
+      <div class="dev-scores" id="devScores"></div>
+    </div>
+
     <button class="leave-btn" id="leaveBtn">Quitter la table</button>
   </div>
 </div>
@@ -233,7 +317,59 @@ document.getElementById('leaveBtn').onclick = () => {
   socket.emit('leave-table');
   mySeat = null;
   tableView.style.display = 'none';
+  resetDevinettesUI();
 };
+
+document.getElementById('devGuessBtn').onclick = sendGuess;
+document.getElementById('devGuessInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendGuess();
+});
+function sendGuess() {
+  const input = document.getElementById('devGuessInput');
+  const guess = input.value.trim();
+  if (!guess || !mySeat) return;
+  socket.emit('devinettes:guess', { tableIndex: mySeat.tableIndex, guess });
+  input.value = '';
+}
+
+let countdownTimer = null;
+function startCountdown(endsAt) {
+  clearInterval(countdownTimer);
+  const el = document.getElementById('devTimer');
+  function tick() {
+    const secs = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+    el.textContent = `⏱ ${secs}s`;
+    el.classList.toggle('urgent', secs <= 10);
+    if (secs <= 0) clearInterval(countdownTimer);
+  }
+  tick();
+  countdownTimer = setInterval(tick, 1000);
+}
+
+function renderScores(scores) {
+  const el = document.getElementById('devScores');
+  el.innerHTML = scores.map(s => `<div><span>${s.pseudo}</span><span>${s.points} pt${s.points > 1 ? 's' : ''}</span></div>`).join('');
+}
+
+function addFeed(text) {
+  const el = document.getElementById('devFeed');
+  const line = document.createElement('div');
+  line.textContent = text;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function resetDevinettesUI() {
+  clearInterval(countdownTimer);
+  document.getElementById('tvWaiting').style.display = 'block';
+  document.getElementById('tvDevinettes').style.display = 'none';
+  document.getElementById('devFeed').innerHTML = '';
+}
+
+function showDevinettesUI() {
+  document.getElementById('tvWaiting').style.display = 'none';
+  document.getElementById('tvDevinettes').style.display = 'block';
+}
 
 socket.on('connect', () => statusLine.textContent = 'connecté — choisis un pseudo puis une table');
 socket.on('disconnect', () => statusLine.textContent = 'déconnecté…');
@@ -269,9 +405,11 @@ socket.on('state', (snapshot) => {
             .map(() => `<div class="seat"></div>`).join('');
 
       row.innerHTML = `
-        <div class="table-label">Table ${table.index + 1}</div>
-        <div class="seats">${seats}</div>
-        <div class="table-tag">${table.players.length}/${table.capacity}</div>`;
+        <div class="table-row-head">
+          <div class="table-label">Table ${table.index + 1}</div>
+          <div class="table-tag">${table.players.length}/${table.capacity}</div>
+        </div>
+        <div class="seats">${seats}</div>`;
 
       if (!table.full) {
         row.onclick = () => {
@@ -299,6 +437,9 @@ socket.on('state', (snapshot) => {
 function openTableView(label, tableIndex) {
   document.getElementById('tvGame').textContent = label;
   document.getElementById('tvSub').textContent = `Table ${tableIndex + 1}`;
+  document.getElementById('devGuessInput').style.display = '';
+  document.getElementById('devGuessBtn').style.display = '';
+  resetDevinettesUI();
   tableView.style.display = 'flex';
 }
 
@@ -327,6 +468,56 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.style.display = 'none', 2500);
 }
+
+socket.on('devinettes:round-start', (data) => {
+  if (!mySeat || mySeat.tableIndex !== data.tableIndex) return;
+  showDevinettesUI();
+  document.getElementById('devFeed').innerHTML = '';
+  document.getElementById('devRole').textContent = `Manche ${data.round}/${data.totalRounds} — ${data.meneurPseudo} fait deviner`;
+  document.getElementById('devWord').textContent = '_ '.repeat(data.wordLength).trim();
+  document.getElementById('devGuessInput').disabled = false;
+  document.getElementById('devGuessBtn').disabled = false;
+  document.getElementById('devGuessInput').placeholder = 'Ta réponse…';
+  renderScores(data.scores);
+  startCountdown(data.endsAt);
+});
+
+socket.on('devinettes:you-are-meneur', (data) => {
+  if (!mySeat || mySeat.tableIndex !== data.tableIndex) return;
+  showDevinettesUI();
+  document.getElementById('devRole').textContent = `Manche ${data.round}/${data.totalRounds} — c'est à toi de faire deviner !`;
+  document.getElementById('devWord').textContent = data.word;
+  document.getElementById('devGuessInput').disabled = true;
+  document.getElementById('devGuessBtn').disabled = true;
+  document.getElementById('devGuessInput').placeholder = 'Décris ce mot aux autres à voix haute';
+  startCountdown(data.endsAt);
+});
+
+socket.on('devinettes:wrong-guess', (data) => {
+  addFeed(`${data.pseudo} a proposé "${data.guess}" — raté`);
+});
+
+socket.on('devinettes:round-end', (data) => {
+  clearInterval(countdownTimer);
+  document.getElementById('devTimer').textContent = '';
+  document.getElementById('devWord').textContent = data.word;
+  document.getElementById('devGuessInput').disabled = true;
+  document.getElementById('devGuessBtn').disabled = true;
+  addFeed(data.winnerPseudo ? `✅ ${data.winnerPseudo} a trouvé "${data.word}" !` : `⏱ Personne n'a trouvé — c'était "${data.word}"`);
+  renderScores(data.scores);
+});
+
+socket.on('devinettes:game-over', (data) => {
+  clearInterval(countdownTimer);
+  const podium = data.scores.map((s, i) => `${i + 1}. ${s.pseudo} — ${s.points} pts`).join('\n');
+  showToast(data.reason || 'Partie terminée !');
+  document.getElementById('devRole').textContent = 'Partie terminée';
+  document.getElementById('devWord').textContent = '🏆';
+  document.getElementById('devGuessInput').style.display = 'none';
+  document.getElementById('devGuessBtn').style.display = 'none';
+  renderScores(data.scores);
+  mySeat = null;
+});
 </script>
 </body>
 </html>
