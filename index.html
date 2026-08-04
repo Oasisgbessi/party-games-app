@@ -255,6 +255,35 @@
     padding: 3px 0;
     border-bottom: 1px solid #2a2620;
   }
+  .moc-question {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 1rem;
+    margin-bottom: 14px;
+  }
+  .moc-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .moc-btn {
+    background: #1d1a15;
+    border: 1px solid var(--felt);
+    color: var(--cream);
+    padding: 12px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    text-align: left;
+  }
+  .moc-btn:hover:not(:disabled) { border-color: var(--gold); }
+  .moc-btn.selected { border-color: var(--gold); background: rgba(232,176,75,0.12); }
+  .moc-btn:disabled { cursor: default; opacity: 0.85; }
+  .moc-results { text-align: left; font-family: 'Space Mono', monospace; font-size: 0.78rem; }
+  .moc-bar-row { margin-bottom: 12px; }
+  .moc-bar-label { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .moc-bar-track { background: #1d1a15; border-radius: 6px; height: 10px; overflow: hidden; }
+  .moc-bar-fill { background: var(--gold); height: 100%; }
 </style>
 </head>
 <body>
@@ -289,6 +318,17 @@
       </div>
       <div class="dev-feed" id="devFeed"></div>
       <div class="dev-scores" id="devScores"></div>
+    </div>
+
+    <div id="tvMoc" style="display:none;">
+      <div class="dev-role" id="mocRound"></div>
+      <div class="moc-question" id="mocQuestion">Marche ou crève : choisis ton camp</div>
+      <div class="dev-timer" id="mocTimer"></div>
+      <div class="moc-options" id="mocOptions">
+        <button class="moc-btn" id="mocBtnA"></button>
+        <button class="moc-btn" id="mocBtnB"></button>
+      </div>
+      <div class="moc-results" id="mocResults" style="display:none;"></div>
     </div>
 
     <button class="leave-btn" id="leaveBtn">Quitter la table</button>
@@ -333,9 +373,9 @@ function sendGuess() {
 }
 
 let countdownTimer = null;
-function startCountdown(endsAt) {
+function startCountdown(endsAt, elId = 'devTimer') {
   clearInterval(countdownTimer);
-  const el = document.getElementById('devTimer');
+  const el = document.getElementById(elId);
   function tick() {
     const secs = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
     el.textContent = `⏱ ${secs}s`;
@@ -363,12 +403,20 @@ function resetDevinettesUI() {
   clearInterval(countdownTimer);
   document.getElementById('tvWaiting').style.display = 'block';
   document.getElementById('tvDevinettes').style.display = 'none';
+  document.getElementById('tvMoc').style.display = 'none';
   document.getElementById('devFeed').innerHTML = '';
 }
 
 function showDevinettesUI() {
   document.getElementById('tvWaiting').style.display = 'none';
   document.getElementById('tvDevinettes').style.display = 'block';
+  document.getElementById('tvMoc').style.display = 'none';
+}
+
+function showMocUI() {
+  document.getElementById('tvWaiting').style.display = 'none';
+  document.getElementById('tvDevinettes').style.display = 'none';
+  document.getElementById('tvMoc').style.display = 'block';
 }
 
 socket.on('connect', () => statusLine.textContent = 'connecté — choisis un pseudo puis une table');
@@ -461,6 +509,64 @@ function updateTableView(label, table) {
   }
 }
 
+document.getElementById('mocBtnA').onclick = () => sendVote('A');
+document.getElementById('mocBtnB').onclick = () => sendVote('B');
+function sendVote(choice) {
+  if (!mySeat) return;
+  socket.emit('moc:vote', { tableIndex: mySeat.tableIndex, choice });
+}
+
+socket.on('moc:round-start', (data) => {
+  if (!mySeat || mySeat.gameId !== 'marche_ou_creve' || mySeat.tableIndex !== data.tableIndex) return;
+  showMocUI();
+  document.getElementById('mocRound').textContent = `Manche ${data.round}/${data.totalRounds}`;
+  document.getElementById('mocResults').style.display = 'none';
+  const btnA = document.getElementById('mocBtnA');
+  const btnB = document.getElementById('mocBtnB');
+  btnA.textContent = data.optionA;
+  btnB.textContent = data.optionB;
+  btnA.disabled = false;
+  btnB.disabled = false;
+  btnA.classList.remove('selected');
+  btnB.classList.remove('selected');
+  document.getElementById('mocOptions').style.display = 'flex';
+  startCountdown(data.endsAt, 'mocTimer');
+});
+
+socket.on('moc:vote-ack', (data) => {
+  const btnA = document.getElementById('mocBtnA');
+  const btnB = document.getElementById('mocBtnB');
+  btnA.disabled = true;
+  btnB.disabled = true;
+  (data.choice === 'A' ? btnA : btnB).classList.add('selected');
+  showToast('Vote enregistré — en attente des autres…');
+});
+
+socket.on('moc:round-end', (data) => {
+  clearInterval(countdownTimer);
+  document.getElementById('mocTimer').textContent = '';
+  document.getElementById('mocOptions').style.display = 'none';
+  const results = document.getElementById('mocResults');
+  results.style.display = 'block';
+  results.innerHTML = `
+    <div class="moc-bar-row">
+      <div class="moc-bar-label"><span>${data.optionA}</span><span>${data.countA} (${data.pctA}%)</span></div>
+      <div class="moc-bar-track"><div class="moc-bar-fill" style="width:${data.pctA}%"></div></div>
+    </div>
+    <div class="moc-bar-row">
+      <div class="moc-bar-label"><span>${data.optionB}</span><span>${data.countB} (${data.pctB}%)</span></div>
+      <div class="moc-bar-track"><div class="moc-bar-fill" style="width:${data.pctB}%"></div></div>
+    </div>`;
+});
+
+socket.on('moc:game-over', (data) => {
+  clearInterval(countdownTimer);
+  showToast(data.reason || 'Partie terminée !');
+  document.getElementById('mocRound').textContent = 'Partie terminée';
+  document.getElementById('mocOptions').style.display = 'none';
+  mySeat = null;
+});
+
 let toastTimer;
 function showToast(msg) {
   toast.textContent = msg;
@@ -470,7 +576,7 @@ function showToast(msg) {
 }
 
 socket.on('devinettes:round-start', (data) => {
-  if (!mySeat || mySeat.tableIndex !== data.tableIndex) return;
+  if (!mySeat || mySeat.gameId !== 'devinettes' || mySeat.tableIndex !== data.tableIndex) return;
   showDevinettesUI();
   document.getElementById('devFeed').innerHTML = '';
   document.getElementById('devRole').textContent = `Manche ${data.round}/${data.totalRounds} — ${data.meneurPseudo} fait deviner`;
@@ -483,7 +589,7 @@ socket.on('devinettes:round-start', (data) => {
 });
 
 socket.on('devinettes:you-are-meneur', (data) => {
-  if (!mySeat || mySeat.tableIndex !== data.tableIndex) return;
+  if (!mySeat || mySeat.gameId !== 'devinettes' || mySeat.tableIndex !== data.tableIndex) return;
   showDevinettesUI();
   document.getElementById('devRole').textContent = `Manche ${data.round}/${data.totalRounds} — c'est à toi de faire deviner !`;
   document.getElementById('devWord').textContent = data.word;
