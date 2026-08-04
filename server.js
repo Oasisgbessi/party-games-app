@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const path = require("path");
 const GAMES = require("./games-config");
 const attachDevinettes = require("./games/devinettes");
+const attachMarcheOuCreve = require("./games/marche-ou-creve");
 
 const app = express();
 const server = http.createServer(app);
@@ -21,6 +22,7 @@ for (const gameId of Object.keys(GAMES)) {
 }
 
 const devinettesHandlers = attachDevinettes(io, state);
+const mocHandlers = attachMarcheOuCreve(io, state);
 
 // Retourne un snapshot public (sans exposer les sockets internes)
 function publicSnapshot() {
@@ -88,6 +90,7 @@ io.on("connection", (socket) => {
         players: table.map((p) => p.pseudo),
       });
       devinettesHandlers.onTableFull(gameId, tableIndex);
+      mocHandlers.onTableFull(gameId, tableIndex);
     }
   });
 
@@ -98,6 +101,10 @@ io.on("connection", (socket) => {
 
   socket.on("devinettes:guess", (data) => {
     devinettesHandlers.onGuess(socket, data);
+  });
+
+  socket.on("moc:vote", (data) => {
+    mocHandlers.onVote(socket, data);
   });
 
   socket.on("disconnect", () => {
@@ -116,6 +123,7 @@ function leaveCurrentTable(socket) {
   }
   socket.leave(`${gameId}:${tableIndex}`);
   devinettesHandlers.onLeaveTable(gameId, tableIndex, socket.id);
+  mocHandlers.onLeaveTable(gameId, tableIndex, socket.id);
   socket.data.gameId = null;
   socket.data.tableIndex = null;
 }
